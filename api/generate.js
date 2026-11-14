@@ -1,5 +1,6 @@
-// Server function: runs on Vercel, keeps my keys secret.
-// Anyone can use it. Logged-in users just your a higher limit.
+
+// Server function: runs on Vercel, keeps your keys secret.
+// Anyone can use it. Logged-in users just get a higher limit.
 
 // Usage limits per hour (kept in memory, so they reset if the server restarts)
 const hits = {};
@@ -140,28 +141,62 @@ module.exports = async (req, res) => {
     maxTokens = format === "email" ? 400 : 250;
   }
 
-  // 4. Ask Claude
+  // 4. Ask the AI.
+  // Uses Claude if ANTHROPIC_API_KEY is set. Otherwise uses Google Gemini (has a free tier)
+  // if GEMINI_API_KEY is set. You only need one of the two.
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-5-5",
-        max_tokens: maxTokens,
-        system,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data.error?.message || "API error");
-    const email = (data.content || []).map((b) => b.text || "").join("");
+    let email;
+
+    if (process.env.ANTHROPIC_API_KEY) {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": process.env.ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-haiku-5-5",
+          max_tokens: maxTokens,
+          system,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error?.message || "Anthropic API error");
+      email = (data.content || []).map((b) => b.text || "").join("");
+
+    } else if (process.env.GEMINI_API_KEY) {
+      // The model name can change over time. If you get errors, set GEMINI_MODEL in Vercel
+      // to a current model name from Google AI Studio.
+      const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
+          body: JSON.stringify({
+            systemInstruction: { parts: [{ text: system }] },
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            // Some Gemini models "think" first and that counts toward the limit, so leave room.
+            // The length of the result is controlled by the instructions above.
+            generationConfig: { maxOutputTokens: 2048 },
+          }),
+        }
+      );
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error?.message || "Gemini API error");
+      email = ((data.candidates || [])[0]?.content?.parts || []).map((x) => x.text || "").join("");
+      if (!email) throw new Error("Gemini returned no text");
+
+    } else {
+      throw new Error("No API key set. Add GEMINI_API_KEY or ANTHROPIC_API_KEY in Vercel.");
+    }
+
     // Also tell the page how many requests are left this hour
-    return res.status(200).json({ email, remaining: Math.max(0, max - hits[id].length), limit: max });
+    return res.status(200).json({ email: email.trim(), remaining: Math.max(0, max - hits[id].length), limit: max });
   } catch (e) {
+    console.error(e.message); // shows up in your Vercel logs, which helps with debugging
     return res.status(500).json({ error: "Something went wrong. Please try again." });
   }
 };
