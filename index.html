@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cold Email Personalizer</title>
+<style>
+  /* Colors are stored as variables so we can swap the whole theme at once */
+  :root{--bg:#161514;--card:#222120;--line:#38352f;--text:#f0eee9;--muted:#a09b92;--ph:#7d786f;--accent:#f472b6;--accent-text:#161514;--err:#ff7b6b;color-scheme:dark}
+  :root[data-theme="light"]{--bg:#faf9f7;--card:#ffffff;--line:#e3e0da;--text:#1f1e1d;--muted:#6b6862;--ph:#9a958c;--accent:#db2777;--accent-text:#ffffff;--err:#c0392b;color-scheme:light}
+
+  /* Font color choices from Settings: a light shade for dark mode, a deeper one for light mode */
+  :root[data-font="pink"]{--text:#f9a8d4}
+  :root[data-theme="light"][data-font="pink"]{--text:#be185d}
+  :root[data-font="blue"]{--text:#93c5fd}
+  :root[data-theme="light"][data-font="blue"]{--text:#1d4ed8}
+  :root[data-font="green"]{--text:#86efac}
+  :root[data-theme="light"][data-font="green"]{--text:#15803d}
+  :root[data-font="yellow"]{--text:#fde047}
+  :root[data-theme="light"][data-font="yellow"]{--text:#a16207}
+  :root[data-font="purple"]{--text:#c4b5fd}
+  :root[data-theme="light"][data-font="purple"]{--text:#6d28d9}
+  /* Selection color choices from Settings (pink is the default, so it needs no rule) */
+  :root[data-accent="orange"]{--accent:#fb923c}
+  :root[data-theme="light"][data-accent="orange"]{--accent:#c2410c}
+  :root[data-accent="blue"]{--accent:#60a5fa}
+  :root[data-theme="light"][data-accent="blue"]{--accent:#2563eb}
+  :root[data-accent="green"]{--accent:#4ade80}
+  :root[data-theme="light"][data-accent="green"]{--accent:#15803d}
+  :root[data-accent="purple"]{--accent:#a78bfa}
+  :root[data-theme="light"][data-accent="purple"]{--accent:#7c3aed}
+  :root[data-accent="red"]{--accent:#f87171}
+  :root[data-theme="light"][data-accent="red"]{--accent:#dc2626}
+  /* Text size choices from Settings */
+  :root[data-size="small"]{--fs:14px}
+  :root[data-size="large"]{--fs:19px}
+  .foot{margin-top:24px;font-size:13px}
+  .foot p{margin:0 0 8px;font-size:13px}
+  #emailTools{display:contents}
+  #emailTools[hidden]{display:none}
+  button.swatch{width:36px;height:36px;margin:0;padding:0;border-radius:50%;border:2px solid var(--line)}
+  button.swatch[aria-pressed="true"]{outline:3px solid var(--text);outline-offset:2px}
+  body{margin:0;font:var(--fs,16px)/1.5 system-ui,sans-serif;background:var(--bg);color:var(--text)}
+  main{max-width:640px;margin:0 auto;padding:20px 16px 40px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:nowrap}
+  header h1{min-width:0;font-size:22px}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  .msg{color:var(--muted);font-size:14px;margin:8px 0 0}
+  h2{font-size:18px;margin:0 0 4px}
+  .tabs{display:flex;gap:8px;margin:16px 0;overflow-x:auto}
+  .tabs button{flex:1}
+  button.toggle[aria-pressed="true"]{background:var(--accent);color:var(--accent-text);border-color:transparent}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  details>summary{list-style:none}
+  details>summary::before{content:"▸ "}
+  details[open]>summary::before{content:"▾ "}
+  h1{font-size:24px;margin:8px 0 4px}
+  p{color:var(--muted)}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:16px 0}
+  label{display:block;font-weight:600;font-size:14px;margin:12px 0 6px}
+  textarea,input,select{width:100%;box-sizing:border-box;font:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px}
+  textarea::placeholder,input::placeholder{color:var(--ph)}
+  textarea:focus,input:focus,select:focus{outline:2px solid var(--accent);border-color:transparent}
+  textarea{min-height:84px}
+  button{width:100%;margin-top:16px;font:inherit;font-weight:600;border:0;border-radius:10px;padding:12px;background:var(--accent);color:var(--accent-text);cursor:pointer}
+  button:disabled{opacity:.6}
+  button.toggle{width:auto;margin:0;padding:8px 12px;background:transparent;color:var(--text);border:1px solid var(--line);font-weight:500;white-space:nowrap}
+  #out{white-space:pre-wrap;color:var(--text)}
+  .err{color:var(--err);font-size:14px}
+</style>
+<script>
+  // Apply the saved theme right away (dark is the default)
+  (function(){
+    var t="dark";
+    try{t=localStorage.getItem("theme")||"dark";}catch(e){}
+    document.documentElement.setAttribute("data-theme",t);
+    try{var f=localStorage.getItem("cep_font");if(f)document.documentElement.setAttribute("data-font",f);var a=localStorage.getItem("cep_accent");if(a)document.documentElement.setAttribute("data-accent",a);var z=localStorage.getItem("cep_size");if(z)document.documentElement.setAttribute("data-size",z);}catch(e){}
+  })();
+</script>
+</head>
+<body>
+<main>
+  <header><h1>Cold Email Personalizer</h1><button class="toggle" id="settingsBtn" type="button">⚙ Settings</button></header>
+  <p>Short, personal cold emails in seconds.</p>
+  <div class="actions" style="margin-bottom:4px">
+    <button class="toggle" id="loginBtn" type="button">Log in</button>
+    <button class="toggle" id="signupBtn" type="button">Sign up</button>
+    <button class="toggle" id="logoutBtn" type="button" hidden>Log out</button>
+  </div>
+  <details class="card" id="howBox">
+    <summary style="cursor:pointer;font-weight:600">How it works</summary>
+    <ol style="margin:8px 0 0;padding-left:20px">
+      <li>On the Write tab, say what you offer and who you are writing to.</li>
+      <li>Pick a format and tone, then tap Write my email.</li>
+      <li>Fine-tune it with the buttons below the result, check it for spam words, then copy it or open it in your email app.</li>
+    </ol>
+    <p class="msg">Tip: use the Summarize tab on a bio first for a more personal result.</p>
+  </details>
+  <div class="card" id="authCard" hidden>
+    <h2 id="authTitle" style="margin:0 0 4px;font-size:18px">Log in</h2>
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="email">
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="current-password" placeholder="At least 6 characters">
+    <button id="authSubmit" type="button">Log in</button>
+    <p class="err" id="authErr"></p>
+    <p class="msg" id="authMsg"></p>
+    <button class="toggle" id="authSwitch" type="button" style="margin-top:8px">New here? Sign up</button>
+    <button class="toggle" id="authClose" type="button" style="margin-top:8px">Not now</button>
+  </div>
+  <div class="card" id="settingsCard" hidden>
+    <h2>Settings</h2>
+    <label>Font color</label>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button class="toggle" data-font-pick="" type="button">Default</button>
+      <button class="swatch" data-font-pick="pink" type="button" aria-label="Pink" style="background:#f472b6"></button>
+      <button class="swatch" data-font-pick="blue" type="button" aria-label="Blue" style="background:#60a5fa"></button>
+      <button class="swatch" data-font-pick="green" type="button" aria-label="Green" style="background:#4ade80"></button>
+      <button class="swatch" data-font-pick="yellow" type="button" aria-label="Yellow" style="background:#facc15"></button>
+      <button class="swatch" data-font-pick="purple" type="button" aria-label="Purple" style="background:#a78bfa"></button>
+    </div>
+    <label>Selection color</label>
+    <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+      <button class="swatch" data-accent-pick="" type="button" aria-label="Pink (default)" style="background:#f472b6"></button>
+      <button class="swatch" data-accent-pick="orange" type="button" aria-label="Orange" style="background:#fb923c"></button>
+      <button class="swatch" data-accent-pick="blue" type="button" aria-label="Blue" style="background:#60a5fa"></button>
+      <button class="swatch" data-accent-pick="green" type="button" aria-label="Green" style="background:#4ade80"></button>
+      <button class="swatch" data-accent-pick="purple" type="button" aria-label="Purple" style="background:#a78bfa"></button>
+      <button class="swatch" data-accent-pick="red" type="button" aria-label="Red" style="background:#f87171"></button>
+    </div>
+    <label>Text size</label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="toggle" data-size-pick="small" type="button">Small</button>
+      <button class="toggle" data-size-pick="" type="button">Medium</button>
+      <button class="toggle" data-size-pick="large" type="button">Large</button>
+    </div>
+    <label>Theme</label>
+    <button class="toggle" id="theme" type="button">Light mode</button>
+    <button id="settingsClose" type="button">Done</button>
+  </div>
+  <nav class="tabs" aria-label="Sections">
+    <button class="toggle" data-tab="write" type="button">Write</button>
+    <button class="toggle" data-tab="summarize" type="button">Summarize</button>
+    <button class="toggle" data-tab="batch" type="button">Batch</button>
+    <button class="toggle" data-tab="history" type="button">History</button>
+  </nav>
+
+  <section data-panel="write">
+    <div class="card" id="formCard">
+      <details>
+        <summary style="cursor:pointer;font-weight:600;font-size:14px">Saved offers</summary>
+        <select id="tplSel" style="margin-top:8px"><option value="">Choose a saved offer…</option></select>
+        <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+          <button class="toggle" id="tplSave" type="button">Save current offer</button>
+          <button class="toggle" id="tplDel" type="button">Delete selected</button>
+        </div>
+      </details>
+      <button class="toggle" id="example" type="button" style="margin-top:12px">Try an example</button>
+      <label for="offer">What do you offer?</label>
+      <textarea id="offer"></textarea>
+      <label for="who">About the prospect</label>
+      <textarea id="who" placeholder="Name, role, company, a recent post or launch…"></textarea>
+      <label for="format">Format</label>
+      <select id="format">
+        <option value="email">Email</option>
+        <option value="connect">LinkedIn connection request</option>
+        <option value="dm">LinkedIn message</option>
+      </select>
+      <div class="two">
+        <div>
+          <label for="tone">Tone</label>
+          <select id="tone"><option>Friendly</option><option>Professional</option><option>Casual</option><option>Direct</option></select>
+        </div>
+        <div>
+          <label for="length">Length</label>
+          <select id="length"><option>Short (about 70 words)</option><option>Medium (about 120 words)</option></select>
+        </div>
+      </div>
+      <label for="cta">Call to action</label>
+      <input id="cta" placeholder="e.g. a 15-minute call next week">
+      <details style="margin-top:12px">
+        <summary style="cursor:pointer;font-weight:600;font-size:14px">Write like me (optional)</summary>
+        <p class="msg">Paste 1-2 messages you wrote. Saved on this device only.</p>
+        <textarea id="styleSample" style="min-height:110px" placeholder="Paste something you wrote…"></textarea>
+      </details>
+      <button id="go">Write my email</button>
+      <button class="toggle" id="abBtn" type="button" style="width:100%;margin-top:8px">Write 2 versions to compare</button>
+      <p class="msg" id="limitMsg"></p>
+      <p class="err" id="err"></p>
+    </div>
+    <div class="card" id="abCard" hidden>
+      <h2>Compare versions</h2>
+      <div id="abOut" style="display:grid;gap:12px"></div>
+    </div>
+    <div class="card" id="result" hidden>
+      <div id="out"></div>
+      <p class="msg" id="countMsg"></p>
+      <button id="copy">Copy</button>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
+        <button class="toggle" data-edit="shorter" type="button">Shorter</button>
+        <button class="toggle" data-edit="friendlier" type="button">Friendlier</button>
+        <button class="toggle" data-edit="direct" type="button">More direct</button>
+        <button class="toggle" id="again" type="button">Try again</button>
+        <span id="emailTools">
+          <button class="toggle" id="subjBtn" type="button">Subject ideas</button>
+          <button class="toggle" id="fuBtn" type="button">Follow-ups</button>
+          <button class="toggle" id="mailBtn" type="button">Open in email</button>
+        </span>
+        <button class="toggle" id="spamBtn" type="button">Spam check</button>
+      </div>
+      <p class="err" id="toolErr"></p>
+      <div id="spamOut" style="white-space:pre-wrap;margin-top:12px"></div>
+      <div id="subjOut" style="white-space:pre-wrap;margin-top:12px"></div>
+      <div id="fuOut" style="white-space:pre-wrap;margin-top:12px"></div>
+    </div>
+  </section>
+
+  <section data-panel="summarize" hidden>
+    <div class="card">
+      <h2>Summarize a bio or article</h2>
+      <p class="msg">Paste text about a prospect and get key points to personalize your email.</p>
+      <label for="source">Paste a bio, About page or article</label>
+      <textarea id="source" style="min-height:140px" placeholder="Paste text about the person or company…"></textarea>
+      <button id="sumBtn" type="button">Summarize into key points</button>
+      <p class="err" id="sumErr"></p>
+      <div id="sumOut" style="white-space:pre-wrap"></div>
+      <button class="toggle" id="useSum" type="button" style="margin-top:8px" hidden>Use as prospect details</button>
+    </div>
+  </section>
+
+  <section data-panel="batch" hidden>
+    <div class="card" id="batchCard">
+      <h2>Batch mode</h2>
+      <p class="msg">One prospect per line, up to 10. Uses the offer and settings from the Write tab. Each email counts toward your hourly limit.</p>
+      <textarea id="batch" style="min-height:140px" placeholder="Sam, founder at Acme, just launched a podcast&#10;Priya, head of growth at Zeta, wrote about onboarding"></textarea>
+      <button id="batchBtn" type="button">Write all emails</button>
+      <p class="err" id="batchErr"></p>
+      <div id="batchOut" style="display:grid;gap:12px;margin-top:12px"></div>
+      <button class="toggle" id="csvBtn" type="button" style="margin-top:12px" hidden>Download CSV</button>
+    </div>
+  </section>
+
+  <section data-panel="history" hidden>
+    <div class="card" id="histCard">
+      <h2 id="histTitle">History</h2>
+      <p class="msg">Saved on this device. Log in to sync your history across devices.</p>
+      <p class="msg" id="histEmpty">No emails yet. They will show up here.</p>
+      <div id="histList" style="display:grid;gap:8px"></div>
+      <button class="toggle" id="clearHist" type="button" style="margin-top:12px">Clear history</button>
+    </div>
+  </section>
+  <footer class="foot">
+    <p>What you type is sent to an AI service (Anthropic’s Claude) to write the result. Don’t paste anything confidential, and always review a message before you send it. Your history and settings stay on your device.</p>
+    <button class="toggle" id="feedbackBtn" type="button">Send feedback</button>
+  </footer>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script>
+  const $ = (id) => document.getElementById(id);
+  // Light/dark toggle: flip the theme, update the label, remember the choice
+  const root = document.documentElement;
+  function syncLabel(){
+    $("theme").textContent = root.getAttribute("data-theme") === "dark" ? "Light mode" : "Dark mode";
+  }
+  $("theme").addEventListener("click", () => {
+    const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    root.setAttribute("data-theme", next);
+    try { localStorage.setItem("theme", next); } catch (e) {}
+    syncLabel();
+  });
+  syncLabel();
+
+
+
+  // ---------- Login / sign up (Supabase) ----------
+  // Paste your own values from Supabase: Project Settings > API.
+  // The anon key is meant to be public, so it is safe in this file.
+  const SUPABASE_URL = "PASTE_YOUR_SUPABASE_URL";
+  const SUPABASE_ANON_KEY = "PASTE_YOUR_SUPABASE_ANON_KEY";
+  // If the placeholders above are not replaced yet, this fails. We catch the error
+  // so the rest of the page keeps working and can tell you what is missing.
+  let sb = null;
+  const NOT_SET_UP = "Login isn’t set up yet. Paste your Supabase URL and key into index.html.";
+  try { sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY); } catch (e) { sb = null; }
+
+  let session = null;   // holds the logged-in user's session, or null
+  let mode = "login";   // "login" or "signup"
+  let remainingInfo = null; // how many requests are left this hour, as reported by the server
+  let showAuth = false; // the login box only appears when someone asks for it
+
+  // Show or hide things depending on whether someone is logged in
+  function render() {
+    const loggedIn = !!session;
+    $("authCard").hidden = loggedIn || !showAuth;
+    $("limitMsg").textContent = limitText();
+    $("loginBtn").hidden = loggedIn;
+    $("signupBtn").hidden = loggedIn;
+    $("logoutBtn").hidden = !loggedIn;
+    const signup = mode === "signup";
+    $("authTitle").textContent = signup ? "Sign up" : "Log in";
+    $("authSubmit").textContent = signup ? "Create account" : "Log in";
+    $("authSwitch").textContent = signup ? "Have an account? Log in" : "New here? Sign up";
+    $("password").autocomplete = signup ? "new-password" : "current-password";
+  }
+  function setMode(m) { mode = m; showAuth = true; $("authErr").textContent = ""; $("authMsg").textContent = ""; render(); }
+
+  $("loginBtn").addEventListener("click", () => setMode("login"));
+  $("signupBtn").addEventListener("click", () => setMode("signup"));
+  $("authClose").addEventListener("click", () => { showAuth = false; render(); });
+  $("authSwitch").addEventListener("click", () => setMode(mode === "login" ? "signup" : "login"));
+  $("logoutBtn").addEventListener("click", () => { if (sb) sb.auth.signOut(); });
+
+  $("authSubmit").addEventListener("click", async () => {
+    $("authErr").textContent = "";
+    $("authMsg").textContent = "";
+    if (!sb) { $("authErr").textContent = NOT_SET_UP; return; }
+    const email = $("email").value.trim();
+    const password = $("password").value;
+    if (!email || password.length < 6) {
+      $("authErr").textContent = "Enter your email and a password of at least 6 characters.";
+      return;
+    }
+    $("authSubmit").disabled = true;
+    const result = mode === "signup"
+      ? await sb.auth.signUp({ email, password })
+      : await sb.auth.signInWithPassword({ email, password });
+    $("authSubmit").disabled = false;
+    if (result.error) { $("authErr").textContent = result.error.message; return; }
+    // If email confirmation is on, sign up gives no session until the link is clicked
+    if (mode === "signup" && !result.data.session) {
+      $("authMsg").textContent = "Check your email and click the confirmation link, then log in.";
+    }
+  });
+
+  // Runs whenever someone logs in or out (and once on page load)
+  if (sb) {
+    sb.auth.onAuthStateChange((_event, s) => { session = s; render(); syncHistory(); });
+    sb.auth.getSession().then(({ data }) => { session = data.session; render(); syncHistory(); });
+  } else {
+    render();
+  }
+  // ------------------------------------------------
+
+
+
+  // Read the server's reply. If there is no server yet (like in a preview), explain why.
+  async function readJson(res) {
+    try { return await res.json(); }
+    catch (e) { throw new Error("The server isn’t connected yet. This works after you deploy the site (see README)."); }
+  }
+
+  // ---------- Summarize a bio or article ----------
+  $("sumBtn").addEventListener("click", async () => {
+    $("sumErr").textContent = "";
+    const text = $("source").value.trim();
+    if (!text) { $("sumErr").textContent = "Paste some text first."; return; }
+    $("sumBtn").disabled = true;
+    $("sumBtn").textContent = "Summarizing…";
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: session
+          ? { "content-type": "application/json", "authorization": "Bearer " + session.access_token }
+          : { "content-type": "application/json" },
+        body: JSON.stringify({ mode: "summarize", text }),
+      });
+      const data = await readJson(res);
+      if (!res.ok) throw new Error(data.error);
+      showRemaining(data);
+      $("sumOut").textContent = data.email; // the server sends back its answer in "email"
+      $("useSum").hidden = false;
+    } catch (e) {
+      $("sumErr").textContent = e.message || "Something went wrong.";
+    }
+    $("sumBtn").disabled = false;
+    $("sumBtn").textContent = "Summarize into key points";
+  });
+
+  // Copy the key points into the "About the prospect" box
+  $("useSum").addEventListener("click", () => {
+    const old = $("who").value.trim();
+    $("who").value = (old ? old + "\n" : "") + $("sumOut").textContent;
+    showTab("write");
+    $("who").scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  // -----------------------------------------------
+
+
+  // ---------- Memory (saved in this browser only) ----------
+  // localStorage keeps small bits of data on the visitor's device.
+  // It can fail (private mode, blocked storage), so every use is wrapped in try/catch.
+  const SETTINGS_KEY = "cep_settings";
+  const HISTORY_KEY = "cep_history";
+  const MAX_HISTORY = 20;
+  const SAVED_FIELDS = ["offer", "tone", "length", "cta", "format", "styleSample"]; // the prospect box is NOT saved: it changes every time
+
+  function load(key, fallback) {
+    try { const v = JSON.parse(localStorage.getItem(key)); return v ?? fallback; }
+    catch (e) { return fallback; }
+  }
+  function save(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+  }
+
+  // 1. Remember the offer and settings
+  const savedSettings = load(SETTINGS_KEY, {});
+  SAVED_FIELDS.forEach((id) => {
+    if (savedSettings[id] !== undefined) $(id).value = savedSettings[id];
+    const store = () => {
+      const now = load(SETTINGS_KEY, {});
+      now[id] = $(id).value;
+      save(SETTINGS_KEY, now);
+    };
+    $(id).addEventListener("input", store);
+    $(id).addEventListener("change", store);
+  });
+
+  // 2. Remember past emails
+  function renderHistory() {
+    const items = load(HISTORY_KEY, []);
+    $("histEmpty").hidden = items.length > 0;
+    $("clearHist").hidden = items.length === 0;
+    $("histTitle").textContent = "History (" + items.length + ")";
+    const list = $("histList");
+    list.textContent = "";
+    items.forEach((item) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "toggle";
+      b.style.cssText = "width:100%;text-align:left;white-space:normal";
+      // textContent (not innerHTML) so saved text can never run as code
+      b.textContent = new Date(item.time).toLocaleDateString() + ": " + item.label;
+      b.addEventListener("click", () => {
+        $("out").textContent = item.email;
+        resetTools();
+        lastFormat = item.format || "email";
+        updateResultTools();
+        $("result").hidden = false;
+        showTab("write");
+        $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      list.appendChild(b);
+    });
+  }
+  function addHistory(email, labelText, format) {
+    const items = load(HISTORY_KEY, []);
+    const label = (labelText || $("who").value).trim().replace(/\s+/g, " ").slice(0, 60) || "Email";
+    items.unshift({ time: Date.now(), label, email, format: format || lastFormat });
+    save(HISTORY_KEY, items.slice(0, MAX_HISTORY));
+    renderHistory();
+    // If logged in, also save to the account (needs the cep_history table, see README)
+    if (sb && session) sb.from("cep_history").insert({ label, email }).then(() => {}, () => {});
+  }
+  $("clearHist").addEventListener("click", () => {
+    if (confirm("Delete all saved emails?")) {
+      save(HISTORY_KEY, []); renderHistory();
+      if (sb && session) sb.from("cep_history").delete().eq("user_id", session.user.id).then(() => {}, () => {});
+    }
+  });
+  renderHistory();
+  // ---------------------------------------------------------
+
+
+  // ---------- Sync history to your account ----------
+  async function syncHistory() {
+    if (!sb || !session) return;
+    try {
+      const { data, error } = await sb.from("cep_history")
+        .select("label,email,created_at").order("created_at", { ascending: false }).limit(MAX_HISTORY);
+      if (error) return;
+      const remote = data.map((r) => ({ time: Date.parse(r.created_at), label: r.label, email: r.email }));
+      const have = new Set(remote.map((r) => r.email));
+      const missing = load(HISTORY_KEY, []).filter((i) => !have.has(i.email));
+      if (missing.length) {
+        await sb.from("cep_history").insert(
+          missing.map((i) => ({ label: i.label, email: i.email, created_at: new Date(i.time).toISOString() })));
+      }
+      const merged = [...remote, ...missing].sort((a, b) => b.time - a.time).slice(0, MAX_HISTORY);
+      save(HISTORY_KEY, merged);
+      renderHistory();
+    } catch (e) {}
+  }
+
+  // ---------- Talk to the server ----------
+  async function api(payload) {
+    const res = await fetch("/api/generate", {
+      method: "POST",
+      headers: session
+        ? { "content-type": "application/json", "authorization": "Bearer " + session.access_token }
+        : { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await readJson(res);
+    if (!res.ok) throw new Error(data.error || "Something went wrong.");
+    showRemaining(data);
+    return data.email; // the server always sends its answer in "email"
+  }
+  function settings() {
+    return {
+      mode: "email", offer: $("offer").value.trim(), tone: $("tone").value, length: $("length").value,
+      cta: $("cta").value, format: $("format").value, style: $("styleSample").value.trim(),
+    };
+  }
+
+  // ---------- Result tools: edit, subjects, follow-ups ----------
+  function resetTools() {
+    $("subjOut").textContent = "";
+    $("fuOut").textContent = "";
+    $("spamOut").textContent = "";
+    $("toolErr").textContent = "";
+  }
+  async function runTool(btn, work, done) {
+    $("toolErr").textContent = "";
+    btn.disabled = true;
+    try { done(await work()); }
+    catch (e) { $("toolErr").textContent = e.message || "Something went wrong."; }
+    btn.disabled = false;
+  }
+  document.querySelectorAll("[data-edit]").forEach((b) => {
+    b.addEventListener("click", () => runTool(b,
+      () => api({ mode: "rewrite", edit: b.dataset.edit, text: $("out").textContent }),
+      (t) => { $("out").textContent = t; updateResultTools(); }));
+  });
+  $("again").addEventListener("click", () => $("go").click());
+  $("subjBtn").addEventListener("click", () => runTool($("subjBtn"),
+    () => api({ mode: "subjects", text: $("out").textContent }),
+    (t) => { $("subjOut").textContent = t; }));
+  $("fuBtn").addEventListener("click", () => runTool($("fuBtn"),
+    () => api({ mode: "followup", text: $("out").textContent }),
+    (t) => { $("fuOut").textContent = t; }));
+
+  // ---------- Saved offers (templates) ----------
+  const TPL_KEY = "cep_templates";
+  function renderTemplates() {
+    const sel = $("tplSel");
+    sel.textContent = "";
+    const first = document.createElement("option");
+    first.value = ""; first.textContent = "Choose a saved offer…";
+    sel.appendChild(first);
+    load(TPL_KEY, []).forEach((t, i) => {
+      const o = document.createElement("option");
+      o.value = String(i); o.textContent = t.name;
+      sel.appendChild(o);
+    });
+  }
+  $("tplSave").addEventListener("click", () => {
+    const offer = $("offer").value.trim();
+    if (!offer) { alert("Write your offer first."); return; }
+    const name = (prompt("Name this offer:") || "").trim().slice(0, 40);
+    if (!name) return;
+    const list = load(TPL_KEY, []);
+    list.push({ name, offer, cta: $("cta").value });
+    const kept = list.slice(-10); // keep the newest 10
+    save(TPL_KEY, kept);
+    renderTemplates();
+    $("tplSel").value = String(kept.length - 1);
+  });
+  $("tplSel").addEventListener("change", () => {
+    if ($("tplSel").value === "") return;
+    const t = load(TPL_KEY, [])[Number($("tplSel").value)];
+    if (!t) return;
+    $("offer").value = t.offer;
+    $("cta").value = t.cta || "";
+    // fire the "input" event so the memory code saves these too
+    $("offer").dispatchEvent(new Event("input"));
+    $("cta").dispatchEvent(new Event("input"));
+  });
+  $("tplDel").addEventListener("click", () => {
+    if ($("tplSel").value === "") return;
+    const list = load(TPL_KEY, []);
+    list.splice(Number($("tplSel").value), 1);
+    save(TPL_KEY, list);
+    renderTemplates();
+  });
+  renderTemplates();
+
+  // ---------- Batch mode ----------
+  $("batchBtn").addEventListener("click", async () => {
+    $("batchErr").textContent = "";
+    $("batchOut").textContent = "";
+    batchResults = [];
+    $("csvBtn").hidden = true;
+    const lines = $("batch").value.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 10);
+    if (!$("offer").value.trim()) { $("batchErr").textContent = "Fill in “What do you offer?” above first."; return; }
+    if (!lines.length) { $("batchErr").textContent = "Add at least one prospect, one per line."; return; }
+    $("batchBtn").disabled = true;
+    for (let i = 0; i < lines.length; i++) {
+      $("batchBtn").textContent = "Writing " + (i + 1) + " of " + lines.length + "…";
+      const box = document.createElement("div");
+      box.className = "card"; box.style.margin = "0";
+      const title = document.createElement("div");
+      title.style.fontWeight = "600"; title.textContent = lines[i];
+      const text = document.createElement("div");
+      text.style.cssText = "white-space:pre-wrap;margin-top:8px";
+      box.append(title, text);
+      $("batchOut").appendChild(box);
+      try {
+        const email = await api({ ...settings(), who: lines[i] });
+        text.textContent = email;
+        const copy = document.createElement("button");
+        copy.type = "button"; copy.className = "toggle"; copy.style.marginTop = "8px"; copy.textContent = "Copy";
+        copy.addEventListener("click", () => {
+          navigator.clipboard.writeText(email);
+          copy.textContent = "Copied";
+          setTimeout(() => (copy.textContent = "Copy"), 1500);
+        });
+        box.appendChild(copy);
+        batchResults.push({ prospect: lines[i], email });
+        addHistory(email, lines[i], settings().format);
+      } catch (e) {
+        text.className = "err"; text.textContent = e.message || "Something went wrong.";
+        break; // stop if we hit a limit or an error
+      }
+    }
+    $("batchBtn").disabled = false;
+    $("batchBtn").textContent = "Write all emails";
+    $("csvBtn").hidden = batchResults.length === 0;
+  });
+
+
+  // ---------- Tabs ----------
+  function showTab(name) {
+    document.querySelectorAll("[data-panel]").forEach((p) => { p.hidden = p.dataset.panel !== name; });
+    document.querySelectorAll("[data-tab]").forEach((b) => {
+      b.setAttribute("aria-pressed", String(b.dataset.tab === name));
+    });
+  }
+  document.querySelectorAll("[data-tab]").forEach((b) => {
+    b.addEventListener("click", () => showTab(b.dataset.tab));
+  });
+  showTab("write");
+
+
+  // ---------- Settings: font color ----------
+  function applyFont(name) {
+    if (name) root.setAttribute("data-font", name); else root.removeAttribute("data-font");
+    document.querySelectorAll("[data-font-pick]").forEach((b) => {
+      b.setAttribute("aria-pressed", String(b.dataset.fontPick === (name || "")));
+    });
+  }
+  document.querySelectorAll("[data-font-pick]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const name = b.dataset.fontPick; // "" means the default color
+      applyFont(name);
+      try { if (name) localStorage.setItem("cep_font", name); else localStorage.removeItem("cep_font"); } catch (e) {}
+    });
+  });
+  let savedFont = "";
+  try { savedFont = localStorage.getItem("cep_font") || ""; } catch (e) {}
+  applyFont(savedFont);
+  // ---------- Settings: selection color (tabs, buttons, highlights) ----------
+  function applyAccent(name) {
+    if (name) root.setAttribute("data-accent", name); else root.removeAttribute("data-accent");
+    document.querySelectorAll("[data-accent-pick]").forEach((b) => {
+      b.setAttribute("aria-pressed", String(b.dataset.accentPick === (name || "")));
+    });
+  }
+  document.querySelectorAll("[data-accent-pick]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const name = b.dataset.accentPick; // "" means pink, the default
+      applyAccent(name);
+      try { if (name) localStorage.setItem("cep_accent", name); else localStorage.removeItem("cep_accent"); } catch (e) {}
+    });
+  });
+  let savedAccent = "";
+  try { savedAccent = localStorage.getItem("cep_accent") || ""; } catch (e) {}
+  applyAccent(savedAccent);
+
+  // ---------- Format-aware result tools ----------
+  let lastFormat = "email";   // what the current result is: email, connect or dm
+  let batchResults = [];      // results of the last batch, for the CSV download
+  function updateResultTools() {
+    $("emailTools").hidden = lastFormat !== "email"; // subjects, follow-ups and mail are for emails only
+    const n = $("out").textContent.length;
+    $("countMsg").textContent = lastFormat === "email" ? ""
+      : n + " characters" + (lastFormat === "connect" ? " (LinkedIn allows about 300 in a connection request)" : "");
+  }
+
+  // ---------- Try an example (cycles through several) ----------
+  const EXAMPLES = [
+    { offer: "I help small ecommerce brands turn customer reviews into ad creative.",
+      who: "Maya Chen, founder of Bloom & Co, a skincare brand that just launched a vitamin C serum and shares a lot of customer reviews on Instagram.",
+      cta: "a 15-minute call next week" },
+    { offer: "I build fast, mobile-friendly websites with online ordering for local restaurants.",
+      who: "Luis Ortega, owner of Casa Verde Taqueria, which is opening a second location. Their menu on the website is still a PDF.",
+      cta: "a quick look at a free mockup" },
+    { offer: "We offer simple payroll and invoicing software for small creative agencies.",
+      who: "Dana Whitfield, COO of Brightline Creative, a 25-person agency that recently posted about hiring five new designers.",
+      cta: "a 20-minute demo this week" },
+    { offer: "I run 45-minute wellness workshops for remote and warehouse teams.",
+      who: "Priya Nair, HR director at Northwind Logistics, who announced a new employee wellbeing program last month.",
+      cta: "a short intro call" },
+    { offer: "I edit podcast episodes and turn them into short clips for social media.",
+      who: "Sam Okafor, host of The Founder Hour podcast, who just released his 100th episode and posts clips on LinkedIn.",
+      cta: "sending over a sample clip" },
+  ];
+  let exampleIdx = 0;      // which example comes next
+  let shownOffer = null;   // the offer we last filled in, so we know if you changed it
+  $("example").addEventListener("click", () => {
+    const current = $("offer").value.trim();
+    // Only ask before replacing text you wrote yourself, not a previous example
+    if (current && current !== shownOffer && !confirm("Replace what you typed with an example?")) return;
+    const ex = EXAMPLES[exampleIdx % EXAMPLES.length];
+    exampleIdx++;
+    $("offer").value = ex.offer;
+    $("who").value = ex.who;
+    $("cta").value = ex.cta;
+    shownOffer = ex.offer;
+    $("example").textContent = "Try another example";
+  });
+
+  // ---------- Open in email app ----------
+  $("mailBtn").addEventListener("click", () => {
+    const text = $("out").textContent;
+    const m = text.match(/^Subject:\s*(.*)\r?\n+([\s\S]*)$/i); // split "Subject: ..." from the body
+    const subject = m ? m[1] : "";
+    const bodyText = m ? m[2] : text;
+    window.location.href = "mailto:?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(bodyText.trim());
+  });
+
+  // ---------- Spam check (runs on your device, no server needed) ----------
+  const SPAM_WORDS = ["free", "guarantee", "act now", "limited time", "urgent", "winner", "cash", "$$$", "100%",
+    "risk-free", "no obligation", "click here", "buy now", "order now", "discount", "bonus", "earn money",
+    "make money", "once in a lifetime", "exclusive deal", "congratulations", "no cost", "double your", "amazing"];
+  function spamCheck(text) {
+    const issues = [];
+    const lower = text.toLowerCase();
+    const hits = SPAM_WORDS.filter((w) => lower.includes(w));
+    if (hits.length) issues.push("Spammy words or phrases: " + hits.join(", ") + ". Try plainer wording.");
+    const sm = text.match(/^Subject:\s*(.*)$/im);
+    if (sm) {
+      if (sm[1].length > 60) issues.push("The subject line is " + sm[1].length + " characters. Under 50 reads better on phones.");
+      if (/!/.test(sm[1])) issues.push("The subject line has an exclamation mark.");
+    }
+    if (/\b[A-Z]{4,}\b/.test(text)) issues.push("There are ALL-CAPS words, which can look like shouting.");
+    if ((text.match(/!/g) || []).length > 1) issues.push("Several exclamation marks. One or none is safer.");
+    if ((text.match(/https?:\/\/|www\./g) || []).length > 1) issues.push("More than one link. Cold emails with fewer links are safer.");
+    const words = text.trim().split(/\s+/).length;
+    if (words > 150) issues.push("It is " + words + " words long. Shorter is easier to read quickly.");
+    return issues;
+  }
+  $("spamBtn").addEventListener("click", () => {
+    const issues = spamCheck($("out").textContent);
+    $("spamOut").textContent = (issues.length
+      ? issues.map((i) => "• " + i).join("\n")
+      : "Looks clean: no common spam triggers found.")
+      + "\n\nThis is a simple check, not a guarantee of inbox placement.";
+  });
+
+  // ---------- Download batch as CSV ----------
+  function csvCell(v) {
+    let t = String(v);
+    if (/^[=+\-@]/.test(t)) t = "'" + t; // stops spreadsheets from running text as a formula
+    return '"' + t.replace(/"/g, '""') + '"';
+  }
+  $("csvBtn").addEventListener("click", () => {
+    const rows = [["Prospect", "Message"], ...batchResults.map((r) => [r.prospect, r.email])];
+    const csv = "\ufeff" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    a.download = "emails.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  // ---------- Settings: text size ----------
+  function applySize(name) {
+    if (name) root.setAttribute("data-size", name); else root.removeAttribute("data-size");
+    document.querySelectorAll("[data-size-pick]").forEach((b) => {
+      b.setAttribute("aria-pressed", String(b.dataset.sizePick === (name || "")));
+    });
+  }
+  document.querySelectorAll("[data-size-pick]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const name = b.dataset.sizePick; // "" means medium, the default
+      applySize(name);
+      try { if (name) localStorage.setItem("cep_size", name); else localStorage.removeItem("cep_size"); } catch (e) {}
+    });
+  });
+  let savedSize = "";
+  try { savedSize = localStorage.getItem("cep_size") || ""; } catch (e) {}
+  applySize(savedSize);
+
+
+  // ---------- Usage counter ----------
+  function limitText() {
+    if (remainingInfo) {
+      return remainingInfo.remaining + " of " + remainingInfo.limit + " requests left this hour"
+        + (session ? "." : ". Log in for more.");
+    }
+    return session ? "Logged in: up to 40 requests per hour." : "Guests get 10 requests per hour. Log in for 40.";
+  }
+  function showRemaining(data) {
+    if (typeof data.remaining === "number") {
+      remainingInfo = { remaining: data.remaining, limit: data.limit };
+      $("limitMsg").textContent = limitText();
+    }
+  }
+
+  // ---------- How it works: open on the first visit only ----------
+  try {
+    if (!localStorage.getItem("cep_seen")) { $("howBox").open = true; localStorage.setItem("cep_seen", "1"); }
+  } catch (e) {}
+
+  // ---------- Feedback ----------
+  // Put your own email address here. Feedback opens in the visitor's email app.
+  const FEEDBACK_EMAIL = "PASTE_YOUR_EMAIL";
+  $("feedbackBtn").addEventListener("click", () => {
+    if (FEEDBACK_EMAIL.startsWith("PASTE")) { alert("Feedback isn’t set up yet."); return; }
+    window.location.href = "mailto:" + FEEDBACK_EMAIL + "?subject=" + encodeURIComponent("Feedback: Cold Email Personalizer");
+  });
+
+  // ---------- A/B: write two different versions ----------
+  $("abBtn").addEventListener("click", async () => {
+    $("err").textContent = "";
+    $("abOut").textContent = "";
+    $("abCard").hidden = true;
+    const btn = $("abBtn");
+    btn.disabled = true;
+    const format = $("format").value;
+    const base = { ...settings(), who: $("who").value };
+    for (const [label, angle] of [["Version A", "a"], ["Version B", "b"]]) {
+      btn.textContent = "Writing " + label.toLowerCase() + "…";
+      let text;
+      try { text = await api({ ...base, angle }); }
+      catch (e) { $("err").textContent = e.message || "Something went wrong."; break; }
+      $("abCard").hidden = false;
+      const box = document.createElement("div");
+      box.className = "card"; box.style.margin = "0";
+      const title = document.createElement("div");
+      title.style.fontWeight = "600"; title.textContent = label;
+      const body = document.createElement("div");
+      body.style.cssText = "white-space:pre-wrap;margin:8px 0";
+      body.textContent = text;
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex;gap:8px;flex-wrap:wrap";
+      const copy = document.createElement("button");
+      copy.type = "button"; copy.className = "toggle"; copy.textContent = "Copy";
+      copy.addEventListener("click", () => {
+        navigator.clipboard.writeText(text);
+        copy.textContent = "Copied";
+        setTimeout(() => (copy.textContent = "Copy"), 1500);
+      });
+      const use = document.createElement("button");
+      use.type = "button"; use.className = "toggle"; use.textContent = "Use this one";
+      use.addEventListener("click", () => {
+        // Move it to the main result so you can edit, spam-check and save it
+        $("out").textContent = text;
+        $("result").hidden = false;
+        lastFormat = format;
+        resetTools();
+        updateResultTools();
+        addHistory(text, null, format);
+        $("result").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+      row.append(copy, use);
+      box.append(title, body, row);
+      $("abOut").appendChild(box);
+    }
+    btn.disabled = false;
+    btn.textContent = "Write 2 versions to compare";
+  });
+
+  $("settingsBtn").addEventListener("click", () => { $("settingsCard").hidden = !$("settingsCard").hidden; });
+  $("settingsClose").addEventListener("click", () => { $("settingsCard").hidden = true; });
+
+  $("go").addEventListener("click", async () => {
+    $("err").textContent = "";
+    $("go").disabled = true;
+    $("go").textContent = "Writing…";
+    try {
+      // Send the form to YOUR server function (api/generate.js)
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: session
+          ? { "content-type": "application/json", "authorization": "Bearer " + session.access_token }
+          : { "content-type": "application/json" },
+        body: JSON.stringify({ ...settings(), who: $("who").value }),
+      });
+      const data = await readJson(res);
+      if (!res.ok) throw new Error(data.error);
+      showRemaining(data);
+      $("out").textContent = data.email;
+      $("result").hidden = false;
+      lastFormat = $("format").value;
+      resetTools();
+      updateResultTools();
+      addHistory(data.email, null, lastFormat);
+    } catch (e) {
+      $("err").textContent = e.message || "Something went wrong.";
+    }
+    $("go").disabled = false;
+    $("go").textContent = "Write my email";
+  });
+
+  $("copy").addEventListener("click", () => {
+    navigator.clipboard.writeText($("out").textContent);
+    $("copy").textContent = "Copied";
+    setTimeout(() => ($("copy").textContent = "Copy"), 1500);
+  });
+</script>
+</body>
+</html>
