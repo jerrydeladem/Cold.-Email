@@ -6,6 +6,68 @@ const hits = {};
 const MAX_GUEST = 10;
 const MAX_USER = 40;
 
+// ---------- Gemini helpers ----------
+// Google renames and retires models often. Instead of hard-coding one name, we ask Google which
+// models this key can use and try them until one works. The one that works is remembered.
+let goodModel = null;
+
+async function listGeminiModels(key) {
+  const r = await fetch("https://generativelanguage.googleapis.com/v1beta/models?pageSize=200", {
+    headers: { "x-goog-api-key": key },
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error?.message || "Could not list Gemini models");
+  const names = (d.models || [])
+    .filter((m) => (m.supportedGenerationMethods || []).includes("generateContent"))
+    .map((m) => m.name.replace("models/", ""))
+    .filter((n) => /^gemini-/.test(n) && !/(image|tts|audio|live|embedding|vision|exp|preview|thinking|robotics|computer|pro)/.test(n))
+    .sort()
+    .reverse(); // newest version numbers first
+  const lite = names.filter((n) => n.includes("flash-lite"));
+  const flash = names.filter((n) => n.includes("flash") && !n.includes("lite"));
+  return [...lite, ...flash].slice(0, 5);
+}
+
+async function callGemini(key, system, prompt) {
+  const text = (data) => ((data.candidates || [])[0]?.content?.parts || []).map((x) => x.text || "").join("");
+  const ask = async (model) => {
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-goog-api-key": key },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: system }] },
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          // Some Gemini models "think" first and that counts toward the limit, so leave room.
+          // The length of the result is controlled by the instructions, not this number.
+          generationConfig: { maxOutputTokens: 2048 },
+        }),
+      }
+    );
+    return { ok: r.ok, status: r.status, data: await r.json() };
+  };
+
+  const tried = [];
+  const first = goodModel || process.env.GEMINI_MODEL;
+  let candidates = first ? [first] : [];
+  let lastErr = "Gemini error";
+  for (let pass = 0; pass < 2; pass++) {
+    for (const m of candidates) {
+      if (tried.includes(m)) continue;
+      tried.push(m);
+      const { ok, status, data } = await ask(m);
+      if (ok && text(data)) { goodModel = m; return text(data); }
+      lastErr = `${m}: ${data.error?.message || "no text returned"}`;
+      console.error(lastErr); // shows up in your Vercel logs
+      // A bad key will not get better by trying other models
+      if (status === 401 || status === 403 || /api key/i.test(lastErr)) throw new Error(lastErr);
+    }
+    if (pass === 0) candidates = await listGeminiModels(key);
+  }
+  throw new Error(lastErr);
+}
+
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Use POST" });
@@ -166,27 +228,7 @@ module.exports = async (req, res) => {
       email = (data.content || []).map((b) => b.text || "").join("");
 
     } else if (process.env.GEMINI_API_KEY) {
-      // The model name can change over time. If you get errors, set GEMINI_MODEL in Vercel
-      // to a current model name from Google AI Studio.
-      const model = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
-      const r = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-        {
-          method: "POST",
-          headers: { "content-type": "application/json", "x-goog-api-key": process.env.GEMINI_API_KEY },
-          body: JSON.stringify({
-            systemInstruction: { parts: [{ text: system }] },
-            contents: [{ role: "user", parts: [{ text: prompt }] }],
-            // Some Gemini models "think" first and that counts toward the limit, so leave room.
-            // The length of the result is controlled by the instructions above.
-            generationConfig: { maxOutputTokens: 2048 },
-          }),
-        }
-      );
-      const data = await r.json();
-      if (!r.ok) throw new Error(data.error?.message || "Gemini API error");
-      email = ((data.candidates || [])[0]?.content?.parts || []).map((x) => x.text || "").join("");
-      if (!email) throw new Error("Gemini returned no text");
+      email = await callGemini(process.env.GEMINI_API_KEY, system, prompt);
 
     } else {
       throw new Error("No API key set. Add GEMINI_API_KEY or ANTHROPIC_API_KEY in Vercel.");
