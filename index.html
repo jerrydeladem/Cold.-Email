@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -255,7 +254,7 @@
     <button class="toggle" id="feedbackBtn" type="button">Send feedback</button>
   </footer>
 </main>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4/dist/umd/supabase.min.js"></script>
 <script>
   const $ = (id) => document.getElementById(id);
   // Light/dark toggle: flip the theme, update the label, remember the choice
@@ -276,8 +275,8 @@
   // ---------- Login / sign up (Supabase) ----------
   // Paste your own values from Supabase: Project Settings > API.
   // The anon key is meant to be public, so it is safe in this file.
-  const SUPABASE_URL = "PASTE_YOUR_SUPABASE_URL";
-  const SUPABASE_ANON_KEY = "PASTE_YOUR_SUPABASE_ANON_KEY";
+  const SUPABASE_URL = "https://ipizdeqihjbmwwwwwfrp.supabase.co";
+  const SUPABASE_ANON_KEY = "sb_publishable_W33Hq7dmNH9SgiTMxCnE4Q_ams9-b5z";
   // If the placeholders above are not replaced yet, this fails. We catch the error
   // so the rest of the page keeps working and can tell you what is missing.
   let sb = null;
@@ -807,7 +806,7 @@
 
   // ---------- Feedback ----------
   // Put your own email address here. Feedback opens in the visitor's email app.
-  const FEEDBACK_EMAIL = "PASTE_YOUR_EMAIL";
+  const FEEDBACK_EMAIL = "fianyehiajerry@outlook.com";
   $("feedbackBtn").addEventListener("click", () => {
     if (FEEDBACK_EMAIL.startsWith("PASTE")) { alert("Feedback isn’t set up yet."); return; }
     window.location.href = "mailto:" + FEEDBACK_EMAIL + "?subject=" + encodeURIComponent("Feedback: Cold Email Personalizer");
