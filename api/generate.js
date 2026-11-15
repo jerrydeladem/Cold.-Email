@@ -1,4 +1,3 @@
-
 // Server function: runs on Vercel, keeps your keys secret.
 // Anyone can use it. Logged-in users just get a higher limit.
 
